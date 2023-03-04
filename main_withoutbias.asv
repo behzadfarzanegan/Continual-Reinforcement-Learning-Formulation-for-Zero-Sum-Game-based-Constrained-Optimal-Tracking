@@ -1,0 +1,294 @@
+clear all;
+close all;clc;
+
+% format short
+
+x(:,1) = [pi/3,pi/6,0,0]';
+x(:,2) = [pi/3,pi/6,0,0]';
+r(:,1) = [0;1;1;0]';
+r(:,2) = [0;1;1;0]';
+e(:,1)=x(:,1)-r(:,1);
+e(:,2)=x(:,2)-r(:,2);
+X(:,1) = [e(:,1);r(:,1)];
+X(:,2) = [e(:,2);r(:,2)];
+n=length(x);%states
+m=2;%inputs
+Q = 5*eye(n);
+QN = [Q zeros(n,n);zeros(n,n) zeros(n,n)];
+R = eye(m);
+
+
+% Creat mesh domain
+% aj =0.05;
+gamma = 0.9;
+%au = 0.001;
+
+
+Neuron_Num_c = 11;
+Neuron_Num_a =20;
+%second layer weight update
+
+kv = 3;
+kv1 = 3;
+B1 = 0.0081*rand(Neuron_Num_c,1);
+B2 = 0.01*rand(Neuron_Num_a,2);
+%%
+ bpTrain
+% load('WEIHGT.mat')
+%  InitializeWeights;
+
+%  load('WEIHGT2.mat')
+v_actor(:,:,1)=Va;
+W_actor(:,:,1)=Wa;
+v_critic(:,:,1)=2*randn(n*2,Neuron_Num_c);
+W_critic(:,:,1)=2*randn(Neuron_Num_c,1);
+
+v_actor(:,:,2)=Va;
+W_actor(:,:,2)=Wa;
+v_critic(:,:,2)=v_critic(:,:,1);
+W_critic(:,:,2)=W_critic(:,:,1);
+
+alphaj=0.08;
+alphau=0.000005*0;
+au = 0.00002*0;
+aj =0.09;
+
+L=1;
+%%
+
+
+
+ad_u = W_actor(:,:,2)'*tanh(v_actor(:,:,2)'*tanh(X(:,2)));
+% ad_u=0.7;
+u(:,1) = ad_u;
+u(:,2) = ad_u;
+%
+% J_sum(1:2)=0;
+% Jhatsum(1:2)=0;
+%x(:,2) = Linear_sys_std(x(:,1),u(1));
+% Main Loop
+for k = 2:3000
+    
+    e(:,k)=x(:,k)-r(:,k);
+    X(:,k) = [e(:,k);r(:,k)];  
+    
+    Yk_1 = e(:,k-1)'*Q*e(:,k-1)+u(:,k-1)'*R*u(:,k-1);
+    delta_x = gamma*Critic_NL_gamma_bah(X(:,k),v_critic(:,:,k),Neuron_Num_c)-Critic_NL_gamma_bah(X(:,k-1),v_critic(:,:,k),Neuron_Num_c);
+    EJK = Yk_1+W_critic(:,:,k)'*delta_x;
+    
+     YK = X(:,k)'*QN*X(:,k)+u(:,k)'*R*u(:,k);
+    temp_1 = v_critic(:,:,k);
+    temp_2 = W_critic(:,:,k);
+    
+    for LL=1:L
+        delta_xK = gamma*Critic_NL_gamma_bah(X(:,k),temp_1,Neuron_Num_c)-Critic_NL_gamma_bah(X(:,k-1),temp_1,Neuron_Num_c);
+%         XK = delta_xK;
+        %     EJK = YK+W_critic(:,k)'*XK;
+        %W_critic(:,k+1) = XK*inv(XK'*XK)*(aj*EJK'-YK');
+        temp_1= temp_1-alphaj*X(:,k)*(temp_1'*X(:,k)+B1*kv1*EJK)';
+%         temp_2 =temp_2-aj*(delta_xK*EJK)/(delta_xK'*delta_xK+1);
+         temp_2 =temp_2-aj*(delta_xK*EJK);
+    end
+    v_critic(:,:,k+1)=temp_1;
+    W_critic(:,:,k+1)=temp_2;
+
+    
+     [x(:,k+1),r(:,k+1),Gx] = NLinear_sys_NL_gamma_bah(x(:,k),u(:,k),r(:,k),k);
+     e(:,k+1)=x(:,k+1)-r(:,k+1);
+     X(:,k+1) = [e(:,k+1);r(:,k+1)];
+    u_tilda = W_actor(:,:,k)'*Actor_NL_gamma_bah(X(:,k),v_actor(:,:,k),Neuron_Num_a)+gamma*0.5*inv(R)*Gx'*Dsigdx_NL_gamma_bah(X(:,k+1),v_critic(:,:,k),Neuron_Num_c)'*W_critic(:,:,k);
+%      JX(:,:,k)= (eye(Neuron_Num_c)-diag(tanh(v_critic(:,:,k)'*X(:,k+1)).^2))*v_critic(:,:,k)';
+%      JX1(:,:,k)= (eye(Neuron_Num_c)-diag(tanh(v_critic(:,:,k)'*X(:,k+1)).^2));
+%      Dsigdx_NL_gamma_bah(X(:,k+1),v_critic(:,:,k),Neuron_Num_c);
+%     temp = Actor_NL_gamma_bah(X(:,k),v_actor(:,:,k),Neuron_Num_a)/(Actor_NL_gamma_bah(X(:,k),v_actor(:,:,k),Neuron_Num_a)'*Actor_NL_gamma_bah(X(:,k),v_actor(:,:,k),Neuron_Num_a)+1);
+     temp = Actor_NL_gamma_bah(X(:,k),v_actor(:,:,k),Neuron_Num_a);
+    %      W_actor(:,k+1) = W_actor(:,k)-au*temp*u_tilda';
+    %     v_actor1(:,:,k+1)=v_actor1(:,:,k)+(alpha1*X(:,k)*u_tilda')/(X(:,k)'*X(:,k)+1);
+    
+    W_actor(:,:,k+1) = W_actor(:,:,k)-au*temp*u_tilda';
+    v_actor(:,:,k+1)=v_actor(:,:,k)-alphau*X(:,k)*(diag((1-tanh(v_actor(:,:,k)'*X(:,k)).^2))*W_actor(:,:,k)*u_tilda)';
+%     v_actor(:,:,k+1)=v_actor(:,:,k)-alphau*X(:,k)*(v_actor(:,:,k)'*X(:,k)+B2*kv*u_tilda)';
+    %     u_tilda_error(:,k)=gamma*0.5*inv(R)*B'*Dsigdx_NL_gamma_bah(X(:,k+1),v_critic(:,:,k),Neuron_Num_c)'*W_critic(:,k);
+    if k<300
+        u(:,k+1) = W_actor(:,:,k+1)'*Actor_NL_gamma_bah(X(:,k+1),v_actor(:,:,k+1),Neuron_Num_a)+0*rand;
+    else
+        u(:,k+1) = W_actor(:,:,k+1)'*Actor_NL_gamma_bah(X(:,k+1),v_actor(:,:,k+1),Neuron_Num_a);
+    end
+    U_tilda(:,k)=u_tilda;
+    Err(k)=EJK;
+    cost(k)=YK;
+end
+
+figure(1);hold on;
+% nn = 1:iter+1;
+subplot 331; plot(x(1,:),'b','LineWidth',2);
+grid on;box on;
+hold on
+plot(r(1,:),'--r','LineWidth',2);
+ylabel('x1,r1','FontWeight','b','FontSize',12);
+xlabel('Iteration','FontWeight','b','FontSize',12);
+% title('x1 and r1','FontWeight','b','FontSize',12);
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+
+subplot 332; plot(x(2,:),'b','LineWidth',2);
+grid on;box on;
+hold on
+plot(r(2,:),'--r','LineWidth',2);
+ylabel('x2,r2','FontWeight','b','FontSize',12);
+xlabel('Iteration','FontWeight','b','FontSize',12);
+% title('x2 and r2 ','FontWeight','b','FontSize',12);
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+
+subplot 338; plot(x(3,:),'b','LineWidth',2);
+grid on;box on;
+hold on
+plot(r(3,:),'--r','LineWidth',2);
+ylabel('x3,r3','FontWeight','b','FontSize',12);
+xlabel('Iteration','FontWeight','b','FontSize',12);
+% title('x1 and r1','FontWeight','b','FontSize',12);
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+
+subplot 339; plot(x(4,:),'b','LineWidth',2);
+grid on;box on;
+hold on
+plot(r(4,:),'--r','LineWidth',2);
+ylabel('x4,r4','FontWeight','b','FontSize',12);
+xlabel('Iteration','FontWeight','b','FontSize',12);
+% title('x2 and r2 ','FontWeight','b','FontSize',12);
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+
+subplot 333; plot(e(1,:),'--r','LineWidth',2);hold on;plot(e(2,:),'--b','LineWidth',2);hold on;
+xlabel('Sampling instants','FontWeight','b','FontSize',12);
+ylabel('Tracking error','FontWeight','b','FontSize',12);
+grid on;box on;
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+
+subplot 334;
+for j=1:m
+    for i = 1:Neuron_Num_c
+        hold on;
+        P(:)=W_critic(i,1,:);
+        plot(P,'LineWidth',2);
+    end
+end
+xlabel('Sampling instants','FontWeight','b','FontSize',12);
+ylabel('W_{critic}','FontWeight','b','FontSize',12);
+%  title('Weights variation','FontWeight','b','FontSize',12);
+grid on;box on;
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+
+subplot 335; plot(Err,'b');hold on;
+xlabel('Sampling instants','FontWeight','b','FontSize',12);
+ylabel('TDE','FontWeight','b','FontSize',12);
+% title('Error','FontWeight','b','FontSize',12);
+grid on;box on;
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+
+subplot 336;
+for i =1:m
+    plot(U_tilda(i,:),'r');
+end
+xlabel('Sampling instants','FontWeight','b','FontSize',12);
+ylabel('$\tilde{u}$','FontWeight','b','FontSize',16,'Interpreter','latex');
+% title('Utilda','FontWeight','b','FontSize',12);
+grid on;box on;
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+
+subplot 337;
+for i=1:m
+    plot(u(i,:),'r');
+end
+xlabel('Sampling instants','FontWeight','b','FontSize',12);
+ylabel('$\hat{u}$','FontWeight','b','FontSize',16,'Interpreter','latex');
+% title('\hat{u}','FontWeight','b','FontSize',12);
+grid on;box on;
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+% 
+% subplot 338;
+% plot(J_sum,'r');
+% xlabel('Sampling instants','FontWeight','b','FontSize',12);
+% ylabel('Actual Cost','FontWeight','b','FontSize',12);
+% % title('Estimated Cost','FontWeight','b','FontSize',12);
+% grid on;box on;
+% set( gca, 'FontWeight', 'b','FontSize', 12 );
+% 
+% subplot 339;
+% plot(Jhatsum,'k');
+% xlabel('Sampling instants','FontWeight','b','FontSize',12);
+% ylabel('Estimated Value Function','FontWeight','b','FontSize',12);
+% % title('Estimated Cost','FontWeight','b','FontSize',12);
+% grid on;box on;
+% set( gca, 'FontWeight', 'b','FontSize', 12 );
+% 
+% set(gcf,'units','normalized','outerposition',[0 0 1 1])
+
+% Weights plot
+figure;
+subplot 221;
+for i = 1:Neuron_Num_c
+    hold on;
+    plot(W_critic(i,:),'LineWidth',2);
+end
+xlabel('Sampling instants','FontWeight','b','FontSize',12);
+ylabel('W_{critic}','FontWeight','b','FontSize',12);
+%  title('Weights variation','FontWeight','b','FontSize',12);
+grid on;box on;
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+
+for i = 1:length(v_critic)
+    temp_m1 = v_critic(:,:,i);
+    Vcritic(:,i) = temp_m1(:);
+    temp_m2 = v_actor(:,:,i);
+    Vactor(:,i) = temp_m2(:);
+end
+
+subplot 222;
+for i = 1:Neuron_Num_c
+    hold on;
+    plot(Vcritic(i,:),'LineWidth',2);
+end
+xlabel('Sampling instants','FontWeight','b','FontSize',12);
+ylabel('V_{critic}','FontWeight','b','FontSize',12);
+%  title('Weights variation','FontWeight','b','FontSize',12);
+grid on;box on;
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+subplot 223;
+for j=1:m
+    for i = 1:Neuron_Num_c
+        hold on;
+        P(:)=W_actor(i,j,:);
+        plot(P,'LineWidth',2);
+    end
+end
+xlabel('Sampling instants','FontWeight','b','FontSize',12);
+ylabel('W_{actor}','FontWeight','b','FontSize',12);
+%  title('Weights variation','FontWeight','b','FontSize',12);
+grid on;box on;
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+
+subplot 224;
+for i = 1:Neuron_Num_c
+    hold on;
+    plot(Vactor(i,:),'LineWidth',2);
+end
+xlabel('Sampling instants','FontWeight','b','FontSize',12);
+ylabel('V_{actor}','FontWeight','b','FontSize',12);
+%  title('Weights variation','FontWeight','b','FontSize',12);
+grid on;box on;
+set( gca, 'FontWeight', 'b','FontSize', 12 );
+
+
+% figure;
+% plot(u,'r');
+% xlabel('Sampling instants','FontWeight','b','FontSize',12);
+% ylabel('$$\hat{u}$$','FontWeight','b','FontSize',12,'Interpreter','latex');
+% title('$$\hat{u}$$','FontWeight','b','FontSize',12,'Interpreter','latex');
+% grid on;box on;
+% set( gca, 'FontWeight', 'b','FontSize', 12 );
+%
+% % creating the zoom-in inset
+% ax=axes;
+% set(ax,'units','normalized','position',[0.4,0.2,0.2,0.2]);
+% box(ax,'on');
+% plot(u,'r','LineWidth',2,'parent',ax); grid on;
+% set(ax,'xlim',[800,850],'ylim',[-0.1,0.1]);
